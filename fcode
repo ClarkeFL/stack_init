@@ -1,0 +1,319 @@
+#!/bin/bash
+
+# fcode - Project Generator
+# Usage: fcode init [folder_name]
+
+set -e
+
+COMMAND=$1
+PROJECT_NAME=$2
+
+# Colors
+GREEN='\033[0;32m'
+BLUE='\033[0;34m'
+RED='\033[0;31m'
+NC='\033[0m' # No Color
+
+log() {
+    echo -e "${BLUE}[fcode]${NC} $1"
+}
+
+success() {
+    echo -e "${GREEN}[success]${NC} $1"
+}
+
+error() {
+    echo -e "${RED}[error]${NC} $1"
+    exit 1
+}
+
+check_bun() {
+    if ! command -v bun &> /dev/null; then
+        log "Bun is not installed. Installing Bun..."
+        curl -fsSL https://bun.sh/install | bash
+        export BUN_INSTALL="$HOME/.bun"
+        export PATH="$BUN_INSTALL/bin:$PATH"
+    fi
+}
+
+generate_svelte_config() {
+    cat <<EOF > svelte.config.js
+import adapter from '@sveltejs/adapter-static';
+import { vitePreprocess } from '@sveltejs/vite-plugin-svelte';
+
+/** @type {import('@sveltejs/kit').Config} */
+const config = {
+	// Consult https://kit.svelte.dev/docs/integrations#preprocessors
+	// for more information about preprocessors
+	preprocess: vitePreprocess(),
+
+	kit: {
+		// adapter-static config
+		adapter: adapter({
+			// default options are shown. On some platforms
+			// these options are set automatically — see below
+			pages: 'build',
+			assets: 'build',
+			fallback: 'index.html', // Essential for SPA routing when served by FastAPI
+			precompress: false,
+			strict: true
+		})
+	}
+};
+
+export default config;
+EOF
+}
+
+generate_vite_config() {
+    cat <<EOF > vite.config.ts
+import { sveltekit } from '@sveltejs/kit/vite';
+import { defineConfig } from 'vite';
+
+export default defineConfig({
+	plugins: [sveltekit()]
+});
+EOF
+}
+
+generate_package_json() {
+    cat <<EOF > package.json
+{
+  "name": "frontend",
+  "version": "0.0.1",
+  "private": true,
+  "scripts": {
+    "dev": "vite dev",
+    "build": "vite build",
+    "preview": "vite preview",
+    "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
+    "check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch"
+  },
+  "devDependencies": {
+    "@sveltejs/adapter-static": "latest",
+    "@sveltejs/kit": "latest",
+    "@sveltejs/vite-plugin-svelte": "latest",
+    "svelte": "next",
+    "svelte-check": "latest",
+    "tslib": "latest",
+    "typescript": "latest",
+    "vite": "latest"
+  },
+  "type": "module"
+}
+EOF
+}
+
+generate_tsconfig() {
+    cat <<EOF > tsconfig.json
+{
+	"extends": "./.svelte-kit/tsconfig.json",
+	"compilerOptions": {
+		"allowJs": true,
+		"checkJs": true,
+		"esModuleInterop": true,
+		"forceConsistentCasingInFileNames": true,
+		"resolveJsonModule": true,
+		"skipLibCheck": true,
+		"sourceMap": true,
+		"strict": true
+	}
+}
+EOF
+}
+
+generate_src_files() {
+    mkdir -p src/routes
+    
+    # app.html
+    cat <<EOF > src/app.html
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<link rel="icon" href="%sveltekit.assets%/favicon.png" />
+		<meta name="viewport" content="width=device-width" />
+		%sveltekit.head%
+	</head>
+	<body data-sveltekit-preload-data="hover">
+		<div style="display: contents">%sveltekit.body%</div>
+	</body>
+</html>
+EOF
+
+    # app.d.ts
+    cat <<EOF > src/app.d.ts
+// See https://kit.svelte.dev/docs/types#app
+// for information about these interfaces
+declare global {
+	namespace App {
+		// interface Error {}
+		// interface Locals {}
+		// interface PageData {}
+		// interface PageState {}
+		// interface Platform {}
+	}
+}
+
+export {};
+EOF
+
+    # +layout.ts (Force prerender)
+    cat <<EOF > src/routes/+layout.ts
+export const prerender = true;
+export const ssr = false; // Disable SSR for typical SPA + FastAPI setups if preferred, though adapter-static can handle pre-rendered HTML too.
+export const trailingSlash = 'always';
+EOF
+
+    # +page.svelte (Svelte 5 Syntax)
+    cat <<EOF > src/routes/+page.svelte
+<script lang="ts">
+	let count = \$state(0);
+	let double = \$derived(count * 2);
+
+	function increment() {
+		count += 1;
+	}
+</script>
+
+<main style="font-family: sans-serif; text-align: center; padding: 2rem;">
+	<h1>Svelte 5 + FastAPI</h1>
+	<p>Runes are working!</p>
+	
+	<div style="margin: 2rem;">
+		<button onclick={increment} style="padding: 0.5rem 1rem; font-size: 1.2rem;">
+			Clicks: {count}
+		</button>
+		<p>Double count: {double}</p>
+	</div>
+</main>
+EOF
+}
+
+generate_fastapi() {
+    cat <<EOF > main.py
+from fastapi import FastAPI
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
+import os
+
+app = FastAPI()
+
+# Path to the SvelteKit build output
+FRONTEND_BUILD_DIR = os.path.join(os.path.dirname(__file__), "../frontend/build")
+
+# Check if build exists
+if not os.path.exists(FRONTEND_BUILD_DIR):
+    print(f"Warning: {FRONTEND_BUILD_DIR} does not exist. Run 'bun run build' in frontend first.")
+    os.makedirs(FRONTEND_BUILD_DIR, exist_ok=True)
+
+# Mount static assets
+# SvelteKit adapter-static usually outputs _app/immutable, etc.
+app.mount("/_app", StaticFiles(directory=os.path.join(FRONTEND_BUILD_DIR, "_app")), name="_app")
+
+# Serve other static files if necessary (like favicon.png, robots.txt)
+# Note: You might need to add specific mounts for other root-level files if they exist.
+
+@app.get("/{full_path:path}")
+async def serve_spa(full_path: str):
+    """
+    Catch-all route to serve index.html for SPA routing.
+    If a file exists (like favicon.png), serve it. Otherwise serve index.html.
+    """
+    file_path = os.path.join(FRONTEND_BUILD_DIR, full_path)
+    if os.path.exists(file_path) and os.path.isfile(file_path):
+        return FileResponse(file_path)
+    
+    # Fallback to index.html for client-side routing
+    return FileResponse(os.path.join(FRONTEND_BUILD_DIR, "index.html"))
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
+EOF
+
+    cat <<EOF > requirements.txt
+fastapi
+uvicorn[standard]
+EOF
+}
+
+init_project() {
+    check_bun
+
+    if [ -n "$PROJECT_NAME" ]; then
+        log "Creating project in $PROJECT_NAME..."
+        mkdir -p "$PROJECT_NAME"
+        cd "$PROJECT_NAME"
+    else
+        log "Initializing project in current directory..."
+    fi
+
+    # Root structure
+    mkdir -p frontend
+    mkdir -p backend
+
+    # --- Frontend ---
+    log "Setting up Svelte 5 (Frontend)..."
+    cd frontend
+    generate_package_json
+    generate_svelte_config
+    generate_vite_config
+    generate_tsconfig
+    generate_src_files
+    
+    log "Installing frontend dependencies with bun..."
+    bun install
+    
+    cd ..
+
+    # --- Backend ---
+    log "Setting up FastAPI (Backend)..."
+    cd backend
+    generate_fastapi
+    cd ..
+
+    # --- Root Helpers ---
+    cat <<EOF > package.json
+{
+  "name": "fcode-project",
+  "private": true,
+  "scripts": {
+    "dev:front": "cd frontend && bun run dev",
+    "dev:back": "cd backend && bun run main.py",
+    "build": "cd frontend && bun run build",
+    "start": "bun run build && cd backend && bun run main.py"
+  }
+}
+EOF
+    
+    # Gitignore
+    cat <<EOF > .gitignore
+node_modules
+.DS_Store
+__pycache__
+.venv
+venv
+.svelte-kit
+build
+.env
+EOF
+
+    success "Project initialized successfully!"
+    echo ""
+    echo "To get started:"
+    if [ -n "$PROJECT_NAME" ]; then
+        echo "  cd $PROJECT_NAME"
+    fi
+    echo "  1. (Optional) Create Python venv: cd backend && python3 -m venv venv && source venv/bin/activate && pip install -r requirements.txt"
+    echo "  2. Run frontend dev: bun run dev:front"
+    echo "  3. Run backend dev:  bun run dev:back"
+    echo "  4. Build & Run:      bun run start"
+}
+
+if [ "$COMMAND" = "init" ]; then
+    init_project
+else
+    echo "Usage: fcode init [folder_name]"
+    exit 1
+fi
