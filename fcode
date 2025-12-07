@@ -1,9 +1,13 @@
 #!/bin/bash
 
 # fcode - Project Generator
+# Version: 1.0.0
 # Usage: fcode init [folder_name]
 
 set -e
+
+VERSION="1.0.0"
+REPO_BASE_URL="https://raw.githubusercontent.com/ClarkeFL/stack_init/main"
 
 COMMAND=$1
 PROJECT_NAME=$2
@@ -257,6 +261,116 @@ validate_project_name() {
     fi
 }
 
+show_version() {
+    echo "fcode version $VERSION"
+}
+
+check_bun_version() {
+    if command -v bun &> /dev/null; then
+        BUN_VERSION=$(bun --version 2>/dev/null || echo "unknown")
+        log "Using Bun version: $BUN_VERSION"
+        log "Check https://bun.sh for latest version"
+    fi
+}
+
+check_update() {
+    log "Checking for updates..."
+    
+    # Fetch latest version
+    LATEST_VERSION=$(curl -fsSL "$REPO_BASE_URL/VERSION" 2>/dev/null | tr -d '\n\r' || echo "")
+    
+    if [ -z "$LATEST_VERSION" ]; then
+        error "Failed to check for updates. Check your internet connection."
+    fi
+    
+    if [ "$VERSION" = "$LATEST_VERSION" ]; then
+        success "Already on latest version ($VERSION)"
+        check_bun_version
+        exit 0
+    fi
+    
+    log "New version available: $VERSION → $LATEST_VERSION"
+    echo ""
+    echo "Changelog (recent changes):"
+    curl -fsSL "$REPO_BASE_URL/CHANGELOG.md" 2>/dev/null | head -20 || echo "Could not fetch changelog"
+    echo ""
+    
+    read -p "Update now? (y/n): " confirm
+    if [ "$confirm" != "y" ]; then
+        log "Update cancelled"
+        exit 0
+    fi
+    
+    perform_update "$LATEST_VERSION"
+}
+
+perform_update() {
+    LATEST_VERSION=$1
+    INSTALL_DIR="/usr/local/bin"
+    SCRIPT_NAME="fcode"
+    SCRIPT_PATH="$INSTALL_DIR/$SCRIPT_NAME"
+    BACKUP_PATH="$INSTALL_DIR/${SCRIPT_NAME}.backup"
+    
+    log "Creating backup..."
+    if [ -w "$SCRIPT_PATH" ]; then
+        cp "$SCRIPT_PATH" "$BACKUP_PATH"
+    else
+        sudo cp "$SCRIPT_PATH" "$BACKUP_PATH"
+    fi
+    
+    log "Downloading latest version..."
+    TEMP_FILE=$(mktemp)
+    if ! curl -fsSL "$REPO_BASE_URL/fcode" -o "$TEMP_FILE"; then
+        error "Failed to download update"
+    fi
+    
+    log "Installing update..."
+    if [ -w "$SCRIPT_PATH" ]; then
+        mv "$TEMP_FILE" "$SCRIPT_PATH"
+        chmod +x "$SCRIPT_PATH"
+    else
+        sudo mv "$TEMP_FILE" "$SCRIPT_PATH"
+        sudo chmod +x "$SCRIPT_PATH"
+    fi
+    
+    success "Updated successfully! ($VERSION → $LATEST_VERSION)"
+    log "Backup saved at: $BACKUP_PATH"
+    log "Run 'fcode rollback' to restore previous version if needed"
+    echo ""
+    check_bun_version
+}
+
+rollback_update() {
+    INSTALL_DIR="/usr/local/bin"
+    SCRIPT_NAME="fcode"
+    SCRIPT_PATH="$INSTALL_DIR/$SCRIPT_NAME"
+    BACKUP_PATH="$INSTALL_DIR/${SCRIPT_NAME}.backup"
+    
+    if [ ! -f "$BACKUP_PATH" ]; then
+        error "No backup found at $BACKUP_PATH"
+    fi
+    
+    log "Backup found: $BACKUP_PATH"
+    echo ""
+    read -p "Restore previous version? (y/n): " confirm
+    if [ "$confirm" != "y" ]; then
+        log "Rollback cancelled"
+        exit 0
+    fi
+    
+    log "Restoring previous version..."
+    if [ -w "$SCRIPT_PATH" ]; then
+        cp "$BACKUP_PATH" "$SCRIPT_PATH"
+        chmod +x "$SCRIPT_PATH"
+    else
+        sudo cp "$BACKUP_PATH" "$SCRIPT_PATH"
+        sudo chmod +x "$SCRIPT_PATH"
+    fi
+    
+    success "Rollback successful!"
+    log "Previous version restored"
+}
+
 init_project() {
     check_bun
     validate_project_name "$PROJECT_NAME"
@@ -346,7 +460,23 @@ EOF
 
 if [ "$COMMAND" = "init" ]; then
     init_project
+elif [ "$COMMAND" = "update" ]; then
+    check_update
+elif [ "$COMMAND" = "rollback" ]; then
+    rollback_update
+elif [ "$COMMAND" = "version" ] || [ "$COMMAND" = "--version" ] || [ "$COMMAND" = "-v" ]; then
+    show_version
 else
-    echo "Usage: fcode init [folder_name]"
+    echo "Usage: fcode <command> [options]"
+    echo ""
+    echo "Commands:"
+    echo "  init [folder_name]  Initialize a new project"
+    echo "  update              Update fcode to latest version"
+    echo "  rollback            Restore previous version from backup"
+    echo "  version             Show current version"
+    echo ""
+    echo "Examples:"
+    echo "  fcode init myapp    Create project in 'myapp' folder"
+    echo "  fcode init          Create project in current directory"
     exit 1
 fi

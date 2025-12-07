@@ -32,6 +32,39 @@ fcode init myproject
 fcode init
 ```
 
+## Version & Updates
+
+### Check Current Version
+
+```bash
+fcode version
+```
+
+### Update to Latest Version
+
+```bash
+fcode update
+```
+
+This will:
+- Check for the latest version on GitHub
+- Show you what changed (changelog)
+- Ask for confirmation before updating
+- Create a backup of your current installation
+- Download and install the new version
+
+The update is safe - if anything goes wrong, you can rollback.
+
+### Rollback to Previous Version
+
+If an update causes issues, restore the previous version:
+
+```bash
+fcode rollback
+```
+
+This will restore from the automatic backup created during the last update.
+
 ## Getting Started
 
 ```bash
@@ -91,6 +124,59 @@ bun run dev:back    # Backend dev server
 
 - Python 3.9+
 - Bun (auto-installed)
+
+## Uninstalling
+
+### Windows
+
+**Quick uninstall:**
+```powershell
+irm https://raw.githubusercontent.com/ClarkeFL/stack_init/main/uninstall.ps1 | iex
+```
+
+**Manual uninstall:**
+```powershell
+# Remove installation directory
+Remove-Item -Recurse -Force "$env:USERPROFILE\.fcode"
+
+# Remove from PATH
+$CurrentPath = [Environment]::GetEnvironmentVariable("Path", "User")
+$NewPath = ($CurrentPath.Split(';') | Where-Object { $_ -notlike "*\.fcode\bin*" }) -join ';'
+[Environment]::SetEnvironmentVariable("Path", $NewPath, "User")
+
+# Restart terminal for changes to take effect
+```
+
+### macOS/Linux
+
+**Quick uninstall:**
+```bash
+curl -fsSL https://raw.githubusercontent.com/ClarkeFL/stack_init/main/uninstall.sh | bash
+```
+
+**Manual uninstall:**
+```bash
+# Remove fcode script
+sudo rm /usr/local/bin/fcode
+```
+
+### Removing Bun (Optional)
+
+The uninstaller will ask if you want to remove Bun as well. You can also remove it manually:
+
+**Windows:**
+```powershell
+Remove-Item -Recurse -Force "$env:USERPROFILE\.bun"
+# Also remove from PATH manually
+```
+
+**macOS/Linux:**
+```bash
+rm -rf "$HOME/.bun"
+# Note: PATH entries in shell rc files are not automatically removed
+```
+
+**Note:** Only remove Bun if you're not using it for other projects.
 
 ## License
 

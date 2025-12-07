@@ -1,6 +1,7 @@
 <#
 .SYNOPSIS
     fcode - Project Generator
+    Version: 1.0.0
     Usage: fcode init [folder_name]
 #>
 
@@ -10,6 +11,8 @@ param (
 )
 
 $ErrorActionPreference = "Stop"
+$VERSION = "1.0.0"
+$REPO_BASE_URL = "https://raw.githubusercontent.com/ClarkeFL/stack_init/main"
 
 # Colors (Simulated via Write-Host)
 function Log-Info { param([string]$msg) Write-Host "[fcode] $msg" -ForegroundColor Cyan }
@@ -192,6 +195,112 @@ function Test-ProjectName {
     }
 }
 
+function Show-Version {
+    Write-Host "fcode version $VERSION"
+}
+
+function Check-BunVersion {
+    if (Get-Command bun -ErrorAction SilentlyContinue) {
+        try {
+            $BunVersion = & bun --version 2>$null
+            Log-Info "Using Bun version: $BunVersion"
+            Log-Info "Check https://bun.sh for latest version"
+        } catch {
+            Log-Info "Bun is installed"
+        }
+    }
+}
+
+function Check-Update {
+    Log-Info "Checking for updates..."
+    
+    try {
+        $LatestVersion = (Invoke-WebRequest -Uri "$REPO_BASE_URL/VERSION").Content.Trim()
+    } catch {
+        Log-Error "Failed to check for updates. Check your internet connection."
+        exit 1
+    }
+    
+    if ($VERSION -eq $LatestVersion) {
+        Log-Success "Already on latest version ($VERSION)"
+        Check-BunVersion
+        exit 0
+    }
+    
+    Log-Info "New version available: $VERSION → $LatestVersion"
+    Write-Host ""
+    Write-Host "Changelog (recent changes):"
+    try {
+        $Changelog = (Invoke-WebRequest -Uri "$REPO_BASE_URL/CHANGELOG.md").Content
+        $Changelog.Split("`n") | Select-Object -First 20 | ForEach-Object { Write-Host $_ }
+    } catch {
+        Write-Host "Could not fetch changelog"
+    }
+    Write-Host ""
+    
+    $Confirm = Read-Host "Update now? (y/n)"
+    if ($Confirm -ne 'y') {
+        Log-Info "Update cancelled"
+        exit 0
+    }
+    
+    Perform-Update -LatestVersion $LatestVersion
+}
+
+function Perform-Update {
+    param([string]$LatestVersion)
+    
+    $InstallDir = "$env:USERPROFILE\.fcode\bin"
+    $ScriptPath = "$InstallDir\fcode.ps1"
+    $BackupPath = "$InstallDir\fcode.ps1.backup"
+    
+    Log-Info "Creating backup..."
+    Copy-Item -Path $ScriptPath -Destination $BackupPath -Force
+    
+    Log-Info "Downloading latest version..."
+    try {
+        Invoke-WebRequest -Uri "$REPO_BASE_URL/fcode.ps1" -OutFile $ScriptPath
+    } catch {
+        Log-Error "Failed to download update. Restoring backup..."
+        Copy-Item -Path $BackupPath -Destination $ScriptPath -Force
+        exit 1
+    }
+    
+    Log-Success "Updated successfully! ($VERSION → $LatestVersion)"
+    Log-Info "Backup saved at: $BackupPath"
+    Log-Info "Run 'fcode rollback' to restore previous version if needed"
+    Write-Host ""
+    Check-BunVersion
+    Write-Host ""
+    Log-Info "Restart your terminal to use the new version"
+}
+
+function Rollback-Update {
+    $InstallDir = "$env:USERPROFILE\.fcode\bin"
+    $ScriptPath = "$InstallDir\fcode.ps1"
+    $BackupPath = "$InstallDir\fcode.ps1.backup"
+    
+    if (-not (Test-Path $BackupPath)) {
+        Log-Error "No backup found at $BackupPath"
+        exit 1
+    }
+    
+    Log-Info "Backup found: $BackupPath"
+    Write-Host ""
+    $Confirm = Read-Host "Restore previous version? (y/n)"
+    if ($Confirm -ne 'y') {
+        Log-Info "Rollback cancelled"
+        exit 0
+    }
+    
+    Log-Info "Restoring previous version..."
+    Copy-Item -Path $BackupPath -Destination $ScriptPath -Force
+    
+    Log-Success "Rollback successful!"
+    Log-Info "Previous version restored"
+    Log-Info "Restart your terminal to use the restored version"
+}
+
 function Generate-FastAPI {
     New-File -Path "app.py" -Content @'
 from fastapi import FastAPI
@@ -291,18 +400,18 @@ function Init-Project {
     Pop-Location
 
     # --- Root Helpers ---
-    New-File -Path "package.json" -Content @"
+    New-File -Path "package.json" -Content @'
 {
-  ""name"": ""fcode-project"",
-  ""private"": true,
-  ""scripts"": {
-    ""dev:front"": ""cd frontend && bun run dev"",
-    ""dev:back"": ""cd backend && python app.py"",
-    ""build"": ""cd frontend && bun run build"",
-    ""start"": ""cd backend && python app.py""
+  "name": "fcode-project",
+  "private": true,
+  "scripts": {
+    "dev:front": "cd frontend && bun run dev",
+    "dev:back": "cd backend && python app.py",
+    "build": "cd frontend && bun run build",
+    "start": "cd backend && python app.py"
   }
 }
-"@
+'@
     
     # Gitignore
     New-File -Path ".gitignore" -Content @"
@@ -341,7 +450,23 @@ build
 
 if ($Command -eq "init") {
     Init-Project
+} elseif ($Command -eq "update") {
+    Check-Update
+} elseif ($Command -eq "rollback") {
+    Rollback-Update
+} elseif ($Command -eq "version" -or $Command -eq "--version" -or $Command -eq "-v") {
+    Show-Version
 } else {
-    Write-Host "Usage: fcode init [folder_name]"
+    Write-Host "Usage: fcode <command> [options]"
+    Write-Host ""
+    Write-Host "Commands:"
+    Write-Host "  init [folder_name]  Initialize a new project"
+    Write-Host "  update              Update fcode to latest version"
+    Write-Host "  rollback            Restore previous version from backup"
+    Write-Host "  version             Show current version"
+    Write-Host ""
+    Write-Host "Examples:"
+    Write-Host "  fcode init myapp    Create project in 'myapp' folder"
+    Write-Host "  fcode init          Create project in current directory"
     exit 1
 }
