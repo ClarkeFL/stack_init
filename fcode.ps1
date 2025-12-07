@@ -75,21 +75,22 @@ function Generate-PackageJson {
   "name": "frontend",
   "version": "0.0.1",
   "private": true,
+  "type": "module",
   "scripts": {
     "dev": "vite dev",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "prepare": "svelte-kit sync || echo ''"
   },
   "devDependencies": {
-    "@sveltejs/adapter-static": "latest",
-    "@sveltejs/kit": "latest",
-    "@sveltejs/vite-plugin-svelte": "latest",
-    "@tailwindcss/vite": "latest",
-    "svelte": "next",
-    "tailwindcss": "latest",
-    "vite": "latest"
-  },
-  "type": "module"
+    "@sveltejs/adapter-static": "^3.0.0",
+    "@sveltejs/kit": "^2.0.0",
+    "@sveltejs/vite-plugin-svelte": "^5.0.0",
+    "@tailwindcss/vite": "^4.0.0",
+    "svelte": "^5.0.0",
+    "tailwindcss": "^4.0.0",
+    "vite": "^6.0.0"
+  }
 }
 '@
 }
