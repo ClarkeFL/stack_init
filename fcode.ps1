@@ -11,7 +11,7 @@ param (
 )
 
 $ErrorActionPreference = "Stop"
-$VERSION = "1.0.0"
+$VERSION = "1.0.1"
 $REPO_BASE_URL = "https://raw.githubusercontent.com/ClarkeFL/stack_init/main"
 
 # Colors (Simulated via Write-Host)
@@ -31,7 +31,15 @@ function Check-Bun {
 
 function New-File {
     param($Path, $Content)
-    Set-Content -Path $Path -Value $Content -Encoding UTF8
+    # Convert to absolute path and ensure parent directory exists
+    $absolutePath = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($Path)
+    $parentDir = Split-Path -Path $absolutePath -Parent
+    if (!(Test-Path $parentDir)) {
+        New-Item -Path $parentDir -ItemType Directory -Force | Out-Null
+    }
+    # Use UTF-8 without BOM for compatibility with Node.js/Vite/Bun
+    $Utf8NoBomEncoding = New-Object System.Text.UTF8Encoding $False
+    [System.IO.File]::WriteAllText($absolutePath, $Content, $Utf8NoBomEncoding)
 }
 
 function Generate-SvelteConfig {
