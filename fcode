@@ -43,18 +43,13 @@ import { vitePreprocess } from '@sveltejs/vite-plugin-svelte';
 
 /** @type {import('@sveltejs/kit').Config} */
 const config = {
-	// Consult https://kit.svelte.dev/docs/integrations#preprocessors
-	// for more information about preprocessors
 	preprocess: vitePreprocess(),
 
 	kit: {
-		// adapter-static config
 		adapter: adapter({
-			// default options are shown. On some platforms
-			// these options are set automatically — see below
-			pages: 'build',
-			assets: 'build',
-			fallback: 'index.html', // Essential for SPA routing when served by FastAPI
+			pages: '../backend/build',
+			assets: '../backend/build',
+			fallback: 'index.html',
 			precompress: false,
 			strict: true
 		})
@@ -68,10 +63,11 @@ EOF
 generate_vite_config() {
     cat <<EOF > vite.config.ts
 import { sveltekit } from '@sveltejs/kit/vite';
+import tailwindcss from '@tailwindcss/vite';
 import { defineConfig } from 'vite';
 
 export default defineConfig({
-	plugins: [sveltekit()]
+	plugins: [sveltekit(), tailwindcss()]
 });
 EOF
 }
@@ -93,8 +89,10 @@ generate_package_json() {
     "@sveltejs/adapter-static": "latest",
     "@sveltejs/kit": "latest",
     "@sveltejs/vite-plugin-svelte": "latest",
+    "@tailwindcss/vite": "latest",
     "svelte": "next",
     "svelte-check": "latest",
+    "tailwindcss": "latest",
     "tslib": "latest",
     "typescript": "latest",
     "vite": "latest"
@@ -125,6 +123,11 @@ EOF
 generate_src_files() {
     mkdir -p src/routes
     
+    # app.css (Tailwind v4)
+    cat <<EOF > src/app.css
+@import "tailwindcss";
+EOF
+
     # app.html
     cat <<EOF > src/app.html
 <!DOCTYPE html>
@@ -158,40 +161,37 @@ declare global {
 export {};
 EOF
 
-    # +layout.ts (Force prerender)
-    cat <<EOF > src/routes/+layout.ts
-export const prerender = true;
-export const ssr = false; // Disable SSR for typical SPA + FastAPI setups if preferred, though adapter-static can handle pre-rendered HTML too.
-export const trailingSlash = 'always';
+    # +layout.svelte (Import CSS)
+    cat <<EOF > src/routes/+layout.svelte
+<script>
+	import '../app.css';
+</script>
+
+<slot />
 EOF
 
-    # +page.svelte (Svelte 5 Syntax)
+    # +layout.ts
+    cat <<EOF > src/routes/+layout.ts
+export const prerender = true;
+export const ssr = false;
+EOF
+
+    # +page.svelte (Minimal)
     cat <<EOF > src/routes/+page.svelte
 <script lang="ts">
 	let count = \$state(0);
-	let double = \$derived(count * 2);
-
-	function increment() {
-		count += 1;
-	}
 </script>
 
-<main style="font-family: sans-serif; text-align: center; padding: 2rem;">
-	<h1>Svelte 5 + FastAPI</h1>
-	<p>Runes are working!</p>
-	
-	<div style="margin: 2rem;">
-		<button onclick={increment} style="padding: 0.5rem 1rem; font-size: 1.2rem;">
-			Clicks: {count}
-		</button>
-		<p>Double count: {double}</p>
-	</div>
-</main>
+<h1>Svelte 5 + FastAPI</h1>
+<p>Edit src/routes/+page.svelte to get started</p>
+<button onclick={() => count++}>
+	Clicks: {count}
+</button>
 EOF
 }
 
 generate_fastapi() {
-    cat <<EOF > main.py
+    cat <<EOF > app.py
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
@@ -199,39 +199,47 @@ import os
 
 app = FastAPI()
 
-# Path to the SvelteKit build output
-FRONTEND_BUILD_DIR = os.path.join(os.path.dirname(__file__), "../frontend/build")
+BUILD_DIR = os.path.join(os.path.dirname(__file__), "build")
 
-# Check if build exists
-if not os.path.exists(FRONTEND_BUILD_DIR):
-    print(f"Warning: {FRONTEND_BUILD_DIR} does not exist. Run 'bun run build' in frontend first.")
-    os.makedirs(FRONTEND_BUILD_DIR, exist_ok=True)
+# Example API endpoint
+@app.get("/api/hello")
+async def hello():
+    return {"message": "Hello from FastAPI!"}
 
-# Mount static assets only if _app directory exists
-# SvelteKit adapter-static usually outputs _app/immutable, etc.
-app_dir = os.path.join(FRONTEND_BUILD_DIR, "_app")
-if os.path.exists(app_dir):
-    app.mount("/_app", StaticFiles(directory=app_dir), name="_app")
+# Mount static files
+if os.path.exists(os.path.join(BUILD_DIR, "_app")):
+    app.mount("/_app", StaticFiles(directory=os.path.join(BUILD_DIR, "_app")), name="_app")
 
-# Serve other static files if necessary (like favicon.png, robots.txt)
-# Note: You might need to add specific mounts for other root-level files if they exist.
-
+# Serve frontend
 @app.get("/{full_path:path}")
-async def serve_spa(full_path: str):
+async def serve_frontend(full_path: str):
     """
-    Catch-all route to serve index.html for SPA routing.
-    If a file exists (like favicon.png), serve it. Otherwise serve index.html.
+    Serve static files and handle SPA routing.
+    
+    For multi-page apps, uncomment the following:
+    # Try exact file match
+    # file_path = os.path.join(BUILD_DIR, full_path)
+    # if os.path.exists(file_path) and os.path.isfile(file_path):
+    #     return FileResponse(file_path)
+    #
+    # Try .html extension
+    # html_file = os.path.join(BUILD_DIR, f"{full_path}.html")
+    # if os.path.exists(html_file):
+    #     return FileResponse(html_file)
     """
-    file_path = os.path.join(FRONTEND_BUILD_DIR, full_path)
+    if full_path == "":
+        full_path = "index.html"
+    
+    file_path = os.path.join(BUILD_DIR, full_path)
     if os.path.exists(file_path) and os.path.isfile(file_path):
         return FileResponse(file_path)
     
-    # Fallback to index.html for client-side routing
-    return FileResponse(os.path.join(FRONTEND_BUILD_DIR, "index.html"))
+    # Fallback to index.html for SPA routing
+    return FileResponse(os.path.join(BUILD_DIR, "index.html"))
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
+    uvicorn.run("app:app", host="0.0.0.0", port=8000, reload=True)
 EOF
 
     cat <<EOF > requirements.txt
@@ -294,9 +302,9 @@ init_project() {
   "private": true,
   "scripts": {
     "dev:front": "cd frontend && bun run dev",
-    "dev:back": "cd backend && bun run main.py",
+    "dev:back": "cd backend && python app.py",
     "build": "cd frontend && bun run build",
-    "start": "bun run build && cd backend && bun run main.py"
+    "start": "cd backend && python app.py"
   }
 }
 EOF
@@ -319,10 +327,21 @@ EOF
     if [ -n "$PROJECT_NAME" ]; then
         echo "  cd $PROJECT_NAME"
     fi
-    echo "  1. (Optional) Create Python venv: cd backend && python3 -m venv venv && source venv/bin/activate && pip install -r requirements.txt"
-    echo "  2. Run frontend dev: bun run dev:front"
-    echo "  3. Run backend dev:  bun run dev:back"
-    echo "  4. Build & Run:      bun run start"
+    echo ""
+    echo "1. (Optional) Create Python venv:"
+    echo "   cd backend && python -m venv venv"
+    echo "   source venv/bin/activate"
+    echo "   pip install -r requirements.txt"
+    echo ""
+    echo "2. Build frontend:"
+    echo "   cd frontend && bun run build"
+    echo ""
+    echo "3. Run backend:"
+    echo "   cd backend && python app.py"
+    echo ""
+    echo "4. Open http://localhost:8000"
+    echo ""
+    echo "Note: Requires Python 3.9+"
 }
 
 if [ "$COMMAND" = "init" ]; then

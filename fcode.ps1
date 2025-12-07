@@ -41,8 +41,8 @@ const config = {
 	preprocess: vitePreprocess(),
 	kit: {
 		adapter: adapter({
-			pages: 'build',
-			assets: 'build',
+			pages: '../backend/build',
+			assets: '../backend/build',
 			fallback: 'index.html',
 			precompress: false,
 			strict: true
@@ -57,62 +57,70 @@ export default config;
 function Generate-ViteConfig {
     New-File -Path "vite.config.ts" -Content @"
 import { sveltekit } from '@sveltejs/kit/vite';
+import tailwindcss from '@tailwindcss/vite';
 import { defineConfig } from 'vite';
 
 export default defineConfig({
-	plugins: [sveltekit()]
+	plugins: [sveltekit(), tailwindcss()]
 });
 "@
 }
 
 function Generate-PackageJson {
-    New-File -Path "package.json" -Content @"
+    New-File -Path "package.json" -Content @'
 {
-  ""name"": ""frontend"",
-  ""version"": ""0.0.1"",
-  ""private"": true,
-  ""scripts"": {
-    ""dev"": ""vite dev"",
-    ""build"": ""vite build"",
-    ""preview"": ""vite preview"",
-    ""check"": ""svelte-kit sync && svelte-check --tsconfig ./tsconfig.json"",
-    ""check:watch"": ""svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch""
+  "name": "frontend",
+  "version": "0.0.1",
+  "private": true,
+  "scripts": {
+    "dev": "vite dev",
+    "build": "vite build",
+    "preview": "vite preview",
+    "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
+    "check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch"
   },
-  ""devDependencies"": {
-    ""@sveltejs/adapter-static"": ""latest"",
-    ""@sveltejs/kit"": ""latest"",
-    ""@sveltejs/vite-plugin-svelte"": ""latest"",
-    ""svelte"": ""next"",
-    ""svelte-check"": ""latest"",
-    ""tslib"": ""latest"",
-    ""typescript"": ""latest"",
-    ""vite"": ""latest""
+  "devDependencies": {
+    "@sveltejs/adapter-static": "latest",
+    "@sveltejs/kit": "latest",
+    "@sveltejs/vite-plugin-svelte": "latest",
+    "@tailwindcss/vite": "latest",
+    "svelte": "next",
+    "svelte-check": "latest",
+    "tailwindcss": "latest",
+    "tslib": "latest",
+    "typescript": "latest",
+    "vite": "latest"
   },
-  ""type"": ""module""
+  "type": "module"
 }
-"@
+'@
 }
 
 function Generate-TsConfig {
-    New-File -Path "tsconfig.json" -Content @"
+    New-File -Path "tsconfig.json" -Content @'
 {
-	""extends"": ""./.svelte-kit/tsconfig.json"",
-	""compilerOptions"": {
-		""allowJs"": true,
-		""checkJs"": true,
-		""esModuleInterop"": true,
-		""forceConsistentCasingInFileNames"": true,
-		""resolveJsonModule"": true,
-		""skipLibCheck"": true,
-		""sourceMap"": true,
-		""strict"": true
+	"extends": "./.svelte-kit/tsconfig.json",
+	"compilerOptions": {
+		"allowJs": true,
+		"checkJs": true,
+		"esModuleInterop": true,
+		"forceConsistentCasingInFileNames": true,
+		"resolveJsonModule": true,
+		"skipLibCheck": true,
+		"sourceMap": true,
+		"strict": true
 	}
 }
-"@
+'@
 }
 
 function Generate-SrcFiles {
     New-Item -Path "src\routes" -ItemType Directory -Force | Out-Null
+
+    # app.css
+    New-File -Path "src\app.css" -Content @"
+@import ""tailwindcss"";
+"@
 
     # app.html
     New-File -Path "src\app.html" -Content @"
@@ -145,39 +153,32 @@ declare global {
 export {};
 "@
 
+    # +layout.svelte
+    New-File -Path "src\routes\+layout.svelte" -Content @'
+<script>
+	import '../app.css';
+</script>
+
+<slot />
+'@
+
     # +layout.ts
     New-File -Path "src\routes\+layout.ts" -Content @"
 export const prerender = true;
 export const ssr = false;
-export const trailingSlash = 'always';
 "@
 
     # +page.svelte
-    # Note: Using `$` for variables in PowerShell strings needs escaping with backtick, but inside @' '@ literal strings it's fine unless we use double quotes.
-    # We used @" (expandable string) above, so we need to be careful.
-    # To be safe and simple, I will use single-quoted here-string @' ... '@ for file content that doesn't need variable interpolation.
-    
     New-File -Path "src\routes\+page.svelte" -Content @'
 <script lang="ts">
 	let count = $state(0);
-	let double = $derived(count * 2);
-
-	function increment() {
-		count += 1;
-	}
 </script>
 
-<main style="font-family: sans-serif; text-align: center; padding: 2rem;">
-	<h1>Svelte 5 + FastAPI</h1>
-	<p>Runes are working!</p>
-	
-	<div style="margin: 2rem;">
-		<button onclick={increment} style="padding: 0.5rem 1rem; font-size: 1.2rem;">
-			Clicks: {count}
-		</button>
-		<p>Double count: {double}</p>
-	</div>
-</main>
+<h1>Svelte 5 + FastAPI</h1>
+<p>Edit src/routes/+page.svelte to get started</p>
+<button onclick={() => count++}>
+	Clicks: {count}
+</button>
 '@
 }
 
@@ -192,7 +193,7 @@ function Test-ProjectName {
 }
 
 function Generate-FastAPI {
-    New-File -Path "main.py" -Content @'
+    New-File -Path "app.py" -Content @'
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
@@ -200,33 +201,47 @@ import os
 
 app = FastAPI()
 
-# Path to the SvelteKit build output
-FRONTEND_BUILD_DIR = os.path.join(os.path.dirname(__file__), "../frontend/build")
+BUILD_DIR = os.path.join(os.path.dirname(__file__), "build")
 
-# Check if build exists
-if not os.path.exists(FRONTEND_BUILD_DIR):
-    print(f"Warning: {FRONTEND_BUILD_DIR} does not exist. Run 'bun run build' in frontend first.")
-    os.makedirs(FRONTEND_BUILD_DIR, exist_ok=True)
+# Example API endpoint
+@app.get("/api/hello")
+async def hello():
+    return {"message": "Hello from FastAPI!"}
 
-# Mount static assets only if _app directory exists
-app_dir = os.path.join(FRONTEND_BUILD_DIR, "_app")
-if os.path.exists(app_dir):
-    app.mount("/_app", StaticFiles(directory=app_dir), name="_app")
+# Mount static files
+if os.path.exists(os.path.join(BUILD_DIR, "_app")):
+    app.mount("/_app", StaticFiles(directory=os.path.join(BUILD_DIR, "_app")), name="_app")
 
+# Serve frontend
 @app.get("/{full_path:path}")
-async def serve_spa(full_path: str):
+async def serve_frontend(full_path: str):
     """
-    Catch-all route to serve index.html for SPA routing.
+    Serve static files and handle SPA routing.
+    
+    For multi-page apps, uncomment the following:
+    # Try exact file match
+    # file_path = os.path.join(BUILD_DIR, full_path)
+    # if os.path.exists(file_path) and os.path.isfile(file_path):
+    #     return FileResponse(file_path)
+    #
+    # Try .html extension
+    # html_file = os.path.join(BUILD_DIR, f"{full_path}.html")
+    # if os.path.exists(html_file):
+    #     return FileResponse(html_file)
     """
-    file_path = os.path.join(FRONTEND_BUILD_DIR, full_path)
+    if full_path == "":
+        full_path = "index.html"
+    
+    file_path = os.path.join(BUILD_DIR, full_path)
     if os.path.exists(file_path) and os.path.isfile(file_path):
         return FileResponse(file_path)
     
-    return FileResponse(os.path.join(FRONTEND_BUILD_DIR, "index.html"))
+    # Fallback to index.html for SPA routing
+    return FileResponse(os.path.join(BUILD_DIR, "index.html"))
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
+    uvicorn.run("app:app", host="0.0.0.0", port=8000, reload=True)
 '@
 
     New-File -Path "requirements.txt" -Content @"
@@ -282,9 +297,9 @@ function Init-Project {
   ""private"": true,
   ""scripts"": {
     ""dev:front"": ""cd frontend && bun run dev"",
-    ""dev:back"": ""cd backend && bun run main.py"",
+    ""dev:back"": ""cd backend && python app.py"",
     ""build"": ""cd frontend && bun run build"",
-    ""start"": ""bun run build && cd backend && bun run main.py""
+    ""start"": ""cd backend && python app.py""
   }
 }
 "@
@@ -307,10 +322,21 @@ build
     if (-not [string]::IsNullOrWhiteSpace($ProjectName)) {
         Write-Host "  cd $ProjectName"
     }
-    Write-Host "  1. (Optional) Setup Python venv: cd backend; python -m venv venv; .\venv\Scripts\Activate; pip install -r requirements.txt"
-    Write-Host "  2. Run frontend dev: bun run dev:front"
-    Write-Host "  3. Run backend dev:  bun run dev:back"
-    Write-Host "  4. Build & Run:      bun run start"
+    Write-Host ""
+    Write-Host "1. (Optional) Create Python venv:"
+    Write-Host "   cd backend && python -m venv venv"
+    Write-Host "   .\venv\Scripts\Activate"
+    Write-Host "   pip install -r requirements.txt"
+    Write-Host ""
+    Write-Host "2. Build frontend:"
+    Write-Host "   cd frontend && bun run build"
+    Write-Host ""
+    Write-Host "3. Run backend:"
+    Write-Host "   cd backend && python app.py"
+    Write-Host ""
+    Write-Host "4. Open http://localhost:8000"
+    Write-Host ""
+    Write-Host "Note: Requires Python 3.9+"
 }
 
 if ($Command -eq "init") {
