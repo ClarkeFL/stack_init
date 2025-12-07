@@ -80,16 +80,16 @@ function Generate-PackageJson {
     "dev": "vite dev",
     "build": "vite build",
     "preview": "vite preview",
-    "prepare": "svelte-kit sync || echo ''"
+    "postinstall": "svelte-kit sync || echo ''"
   },
   "devDependencies": {
-    "@sveltejs/adapter-static": "^3.0.0",
-    "@sveltejs/kit": "^2.0.0",
-    "@sveltejs/vite-plugin-svelte": "^5.0.0",
-    "@tailwindcss/vite": "^4.0.0",
-    "svelte": "^5.0.0",
-    "tailwindcss": "^4.0.0",
-    "vite": "^6.0.0"
+    "@sveltejs/adapter-static": "^3.0.10",
+    "@sveltejs/kit": "^2.49.0",
+    "@sveltejs/vite-plugin-svelte": "^5.1.0",
+    "@tailwindcss/vite": "^4.1.0",
+    "svelte": "^5.45.0",
+    "tailwindcss": "^4.1.0",
+    "vite": "^6.4.0"
   }
 }
 '@
