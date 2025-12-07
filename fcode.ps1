@@ -181,6 +181,16 @@ export const trailingSlash = 'always';
 '@
 }
 
+function Test-ProjectName {
+    param([string]$Name)
+    if (-not [string]::IsNullOrWhiteSpace($Name)) {
+        # Check for invalid characters in project name
+        if ($Name -match '[^a-zA-Z0-9_-]') {
+            Log-Error "Project name contains invalid characters. Use only letters, numbers, hyphens, and underscores."
+        }
+    }
+}
+
 function Generate-FastAPI {
     New-File -Path "main.py" -Content @'
 from fastapi import FastAPI
@@ -198,8 +208,10 @@ if not os.path.exists(FRONTEND_BUILD_DIR):
     print(f"Warning: {FRONTEND_BUILD_DIR} does not exist. Run 'bun run build' in frontend first.")
     os.makedirs(FRONTEND_BUILD_DIR, exist_ok=True)
 
-# Mount static assets
-app.mount("/_app", StaticFiles(directory=os.path.join(FRONTEND_BUILD_DIR, "_app")), name="_app")
+# Mount static assets only if _app directory exists
+app_dir = os.path.join(FRONTEND_BUILD_DIR, "_app")
+if os.path.exists(app_dir):
+    app.mount("/_app", StaticFiles(directory=app_dir), name="_app")
 
 @app.get("/{full_path:path}")
 async def serve_spa(full_path: str):
@@ -225,6 +237,7 @@ uvicorn[standard]
 
 function Init-Project {
     Check-Bun
+    Test-ProjectName $ProjectName
 
     if (-not [string]::IsNullOrWhiteSpace($ProjectName)) {
         Log-Info "Creating project in $ProjectName..."
@@ -248,8 +261,11 @@ function Init-Project {
     Generate-SrcFiles
     
     Log-Info "Installing frontend dependencies with bun..."
-    # Execute bun (using cmd /c to ensure it runs correctly if not immediately in path)
-    cmd /c "bun install"
+    # Execute bun install
+    & bun install
+    if ($LASTEXITCODE -ne 0) {
+        Log-Error "Failed to install frontend dependencies"
+    }
     
     Pop-Location
 

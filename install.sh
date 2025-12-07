@@ -34,39 +34,18 @@ fi
 # 2. Download and Install fcode
 log "Installing $SCRIPT_NAME..."
 
-# If running locally for testing, we might want to just copy the file if it exists nearby.
-# But for the curl | bash use case, we download.
-# For now, I will add a check: if DOWNLOAD_URL contains "YOUR_USERNAME", warn the user.
+TEMP_FILE=$(mktemp)
+if ! curl -fsSL "$DOWNLOAD_URL" -o "$TEMP_FILE"; then
+    echo "Error: Failed to download fcode from $DOWNLOAD_URL"
+    rm -f "$TEMP_FILE"
+    exit 1
+fi
 
-if [[ "$DOWNLOAD_URL" == *"YOUR_USERNAME"* ]]; then
-    echo "WARNING: You have not configured the DOWNLOAD_URL in install.sh yet."
-    echo "For testing purposes, I will look for 'fcode' in the current directory."
-    
-    if [ -f "./fcode" ]; then
-        log "Found local 'fcode' script. Installing from local..."
-        
-        # Check permissions for /usr/local/bin
-        if [ -w "$INSTALL_DIR" ]; then
-            cp ./fcode "$INSTALL_DIR/$SCRIPT_NAME"
-        else
-            log "Need sudo permission to install to $INSTALL_DIR"
-            sudo cp ./fcode "$INSTALL_DIR/$SCRIPT_NAME"
-        fi
-    else
-        echo "Error: Could not find 'fcode' locally and DOWNLOAD_URL is not configured."
-        exit 1
-    fi
+if [ -w "$INSTALL_DIR" ]; then
+    mv "$TEMP_FILE" "$INSTALL_DIR/$SCRIPT_NAME"
 else
-    # Real download logic
-    TEMP_FILE=$(mktemp)
-    curl -fsSL "$DOWNLOAD_URL" -o "$TEMP_FILE"
-    
-    if [ -w "$INSTALL_DIR" ]; then
-        mv "$TEMP_FILE" "$INSTALL_DIR/$SCRIPT_NAME"
-    else
-        log "Need sudo permission to install to $INSTALL_DIR"
-        sudo mv "$TEMP_FILE" "$INSTALL_DIR/$SCRIPT_NAME"
-    fi
+    log "Need sudo permission to install to $INSTALL_DIR"
+    sudo mv "$TEMP_FILE" "$INSTALL_DIR/$SCRIPT_NAME"
 fi
 
 # 3. Finalize

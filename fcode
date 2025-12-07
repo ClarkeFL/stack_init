@@ -207,9 +207,11 @@ if not os.path.exists(FRONTEND_BUILD_DIR):
     print(f"Warning: {FRONTEND_BUILD_DIR} does not exist. Run 'bun run build' in frontend first.")
     os.makedirs(FRONTEND_BUILD_DIR, exist_ok=True)
 
-# Mount static assets
+# Mount static assets only if _app directory exists
 # SvelteKit adapter-static usually outputs _app/immutable, etc.
-app.mount("/_app", StaticFiles(directory=os.path.join(FRONTEND_BUILD_DIR, "_app")), name="_app")
+app_dir = os.path.join(FRONTEND_BUILD_DIR, "_app")
+if os.path.exists(app_dir):
+    app.mount("/_app", StaticFiles(directory=app_dir), name="_app")
 
 # Serve other static files if necessary (like favicon.png, robots.txt)
 # Note: You might need to add specific mounts for other root-level files if they exist.
@@ -238,8 +240,18 @@ uvicorn[standard]
 EOF
 }
 
+validate_project_name() {
+    if [ -n "$1" ]; then
+        # Check for invalid characters in project name
+        if [[ "$1" =~ [^a-zA-Z0-9_-] ]]; then
+            error "Project name contains invalid characters. Use only letters, numbers, hyphens, and underscores."
+        fi
+    fi
+}
+
 init_project() {
     check_bun
+    validate_project_name "$PROJECT_NAME"
 
     if [ -n "$PROJECT_NAME" ]; then
         log "Creating project in $PROJECT_NAME..."
@@ -263,7 +275,9 @@ init_project() {
     generate_src_files
     
     log "Installing frontend dependencies with bun..."
-    bun install
+    if ! bun install; then
+        error "Failed to install frontend dependencies"
+    fi
     
     cd ..
 
