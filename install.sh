@@ -7,7 +7,7 @@ set -e
 # --- Configuration ---
 # REPLACE THIS URL with the raw URL of your 'fcode' script in your public repo
 # Example: https://raw.githubusercontent.com/username/repo/main/fcode
-DOWNLOAD_URL="https://raw.githubusercontent.com/YOUR_USERNAME/YOUR_REPO/main/fcode"
+DOWNLOAD_URL="https://raw.githubusercontent.com/ClarkeFL/stack_init/main/fcode"
 INSTALL_DIR="/usr/local/bin"
 SCRIPT_NAME="fcode"
 
