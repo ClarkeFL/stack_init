@@ -58,7 +58,7 @@ export default config;
 }
 
 function Generate-ViteConfig {
-    New-File -Path "vite.config.ts" -Content @"
+    New-File -Path "vite.config.js" -Content @"
 import { sveltekit } from '@sveltejs/kit/vite';
 import tailwindcss from '@tailwindcss/vite';
 import { defineConfig } from 'vite';
@@ -78,9 +78,7 @@ function Generate-PackageJson {
   "scripts": {
     "dev": "vite dev",
     "build": "vite build",
-    "preview": "vite preview",
-    "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
-    "check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch"
+    "preview": "vite preview"
   },
   "devDependencies": {
     "@sveltejs/adapter-static": "latest",
@@ -88,10 +86,7 @@ function Generate-PackageJson {
     "@sveltejs/vite-plugin-svelte": "latest",
     "@tailwindcss/vite": "latest",
     "svelte": "next",
-    "svelte-check": "latest",
     "tailwindcss": "latest",
-    "tslib": "latest",
-    "typescript": "latest",
     "vite": "latest"
   },
   "type": "module"
@@ -99,23 +94,7 @@ function Generate-PackageJson {
 '@
 }
 
-function Generate-TsConfig {
-    New-File -Path "tsconfig.json" -Content @'
-{
-	"extends": "./.svelte-kit/tsconfig.json",
-	"compilerOptions": {
-		"allowJs": true,
-		"checkJs": true,
-		"esModuleInterop": true,
-		"forceConsistentCasingInFileNames": true,
-		"resolveJsonModule": true,
-		"skipLibCheck": true,
-		"sourceMap": true,
-		"strict": true
-	}
-}
-'@
-}
+
 
 function Generate-SrcFiles {
     New-Item -Path "src\routes" -ItemType Directory -Force | Out-Null
@@ -141,21 +120,6 @@ function Generate-SrcFiles {
 </html>
 "@
 
-    # app.d.ts
-    New-File -Path "src\app.d.ts" -Content @"
-// See https://kit.svelte.dev/docs/types#app
-declare global {
-	namespace App {
-		// interface Error {}
-		// interface Locals {}
-		// interface PageData {}
-		// interface PageState {}
-		// interface Platform {}
-	}
-}
-export {};
-"@
-
     # +layout.svelte
     New-File -Path "src\routes\+layout.svelte" -Content @'
 <script>
@@ -165,15 +129,15 @@ export {};
 <slot />
 '@
 
-    # +layout.ts
-    New-File -Path "src\routes\+layout.ts" -Content @"
+    # +layout.js
+    New-File -Path "src\routes\+layout.js" -Content @"
 export const prerender = true;
 export const ssr = false;
 "@
 
     # +page.svelte
     New-File -Path "src\routes\+page.svelte" -Content @'
-<script lang="ts">
+<script>
 	let count = $state(0);
 </script>
 
@@ -381,7 +345,6 @@ function Init-Project {
     Generate-PackageJson
     Generate-SvelteConfig
     Generate-ViteConfig
-    Generate-TsConfig
     Generate-SrcFiles
     
     Log-Info "Installing frontend dependencies with bun..."

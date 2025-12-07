@@ -65,7 +65,7 @@ EOF
 }
 
 generate_vite_config() {
-    cat <<EOF > vite.config.ts
+    cat <<EOF > vite.config.js
 import { sveltekit } from '@sveltejs/kit/vite';
 import tailwindcss from '@tailwindcss/vite';
 import { defineConfig } from 'vite';
@@ -85,9 +85,7 @@ generate_package_json() {
   "scripts": {
     "dev": "vite dev",
     "build": "vite build",
-    "preview": "vite preview",
-    "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
-    "check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch"
+    "preview": "vite preview"
   },
   "devDependencies": {
     "@sveltejs/adapter-static": "latest",
@@ -95,10 +93,7 @@ generate_package_json() {
     "@sveltejs/vite-plugin-svelte": "latest",
     "@tailwindcss/vite": "latest",
     "svelte": "next",
-    "svelte-check": "latest",
     "tailwindcss": "latest",
-    "tslib": "latest",
-    "typescript": "latest",
     "vite": "latest"
   },
   "type": "module"
@@ -106,23 +101,7 @@ generate_package_json() {
 EOF
 }
 
-generate_tsconfig() {
-    cat <<EOF > tsconfig.json
-{
-	"extends": "./.svelte-kit/tsconfig.json",
-	"compilerOptions": {
-		"allowJs": true,
-		"checkJs": true,
-		"esModuleInterop": true,
-		"forceConsistentCasingInFileNames": true,
-		"resolveJsonModule": true,
-		"skipLibCheck": true,
-		"sourceMap": true,
-		"strict": true
-	}
-}
-EOF
-}
+
 
 generate_src_files() {
     mkdir -p src/routes
@@ -148,23 +127,6 @@ EOF
 </html>
 EOF
 
-    # app.d.ts
-    cat <<EOF > src/app.d.ts
-// See https://kit.svelte.dev/docs/types#app
-// for information about these interfaces
-declare global {
-	namespace App {
-		// interface Error {}
-		// interface Locals {}
-		// interface PageData {}
-		// interface PageState {}
-		// interface Platform {}
-	}
-}
-
-export {};
-EOF
-
     # +layout.svelte (Import CSS)
     cat <<EOF > src/routes/+layout.svelte
 <script>
@@ -174,15 +136,15 @@ EOF
 <slot />
 EOF
 
-    # +layout.ts
-    cat <<EOF > src/routes/+layout.ts
+    # +layout.js
+    cat <<EOF > src/routes/+layout.js
 export const prerender = true;
 export const ssr = false;
 EOF
 
     # +page.svelte (Minimal)
     cat <<EOF > src/routes/+page.svelte
-<script lang="ts">
+<script>
 	let count = \$state(0);
 </script>
 
@@ -393,7 +355,6 @@ init_project() {
     generate_package_json
     generate_svelte_config
     generate_vite_config
-    generate_tsconfig
     generate_src_files
     
     log "Installing frontend dependencies with bun..."
